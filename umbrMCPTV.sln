@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.2.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "umbraTV", "umbraTV\umbraTV.csproj", "{0ED61C95-0253-2305-044C-F2E5C2A13CCA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0ED61C95-0253-2305-044C-F2E5C2A13CCA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0ED61C95-0253-2305-044C-F2E5C2A13CCA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0ED61C95-0253-2305-044C-F2E5C2A13CCA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0ED61C95-0253-2305-044C-F2E5C2A13CCA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C001A481-3849-4D61-9C75-49F8FBD6F28A}
+	EndGlobalSection
+EndGlobal

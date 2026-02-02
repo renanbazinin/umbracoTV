@@ -1,0 +1,25 @@
+**/.git
+**/.gitignore
+**/.vs
+**/.vscode
+**/bin/**
+**/obj/**
+**/.DS_Store
+**/node_modules
+**/*.user
+**/*.suo
+**/*.cache
+**/Thumbs.db
+**/.idea
+**/*.log
+*.md
+.dockerignore
+cloudbuild.yaml
+
+# Keep the SQLite database
+!umbraTV/umbraco/Data/*.db
+!umbraTV/umbraco/Data/*.sqlite
+
+# Ignore temp files but keep structure
+umbraTV/umbraco/Data/TEMP/**
+umbraTV/umbraco/Logs/**

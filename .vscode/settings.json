@@ -1,0 +1,18 @@
+{
+  "servers": {
+    "umbracoLocal": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@umbraco-cms/mcp-dev@latest"
+      ],
+      "env": {
+        "UMBRACO_BASE_URL": "https://localhost:44337",
+        "UMBRACO_CLIENT_ID": "umbraco-back-office-mco",
+        "UMBRACO_CLIENT_SECRET": "sec123",
+        "NODE_TLS_REJECT_UNAUTHORIZED": "0"
+      }
+    }
+  }
+}

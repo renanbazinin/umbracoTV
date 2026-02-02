@@ -1,0 +1,92 @@
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage
+@{
+    Layout = null;
+    var channels = Model?.Children?.Where(c => c.ContentType.Alias == "tvChannel") ?? Enumerable.Empty<IPublishedContent>();
+    var categoryName = Model?.Name ?? "Category";
+    var icon = categoryName.ToLower() switch
+    {
+        "israel" => "🇮🇱",
+        "usa" => "🇺🇸",
+        "news" => "📰",
+        "weatherski" => "⛷️",
+        "tvshowmarathons" => "🎬",
+        _ => "📁"
+    };
+    
+    // Helper function to get logo URL (supports both media picker and URL string)
+    Func<IPublishedContent, string> GetChannelLogoUrl = (channel) => {
+        var logoMedia = channel.Value<IPublishedContent>("logo");
+        var logoUrl = channel.Value<string>("logoUrl") ?? "";
+        if (logoMedia != null) return logoMedia.Url();
+        if (!string.IsNullOrWhiteSpace(logoUrl)) return logoUrl;
+        return "";
+    };
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@categoryName - TV App</title>
+    <link rel="stylesheet" href="/css/tv-app.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="logo">
+                <a href="/" class="back-link">← Back</a>
+            </div>
+            <nav class="nav-links">
+                <a href="/">Home</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <section class="category-header">
+                <div class="category-icon-large">@icon</div>
+                <h1>@categoryName</h1>
+                <p class="channel-count">@channels.Count() channels available</p>
+            </section>
+
+            <section class="channels-section">
+                <div class="channels-grid large">
+                    @foreach (var channel in channels)
+                    {
+                        var logoSrc = GetChannelLogoUrl(channel);
+                        var isActive = channel.Value<bool>("isActive", fallback: Fallback.ToDefaultValue, defaultValue: true);
+                        <a href="@channel.Url()" class="channel-card @(isActive ? "" : "inactive")">
+                            <div class="channel-logo">
+                                @if (!string.IsNullOrWhiteSpace(logoSrc))
+                                {
+                                    <img src="@logoSrc" alt="@channel.Name" />
+                                }
+                                else
+                                {
+                                    <div class="logo-placeholder">📺</div>
+                                }
+                            </div>
+                            <div class="channel-info">
+                                <h3>@channel.Name</h3>
+                                @if (isActive)
+                                {
+                                    <span class="live-badge">● LIVE</span>
+                                }
+                                else
+                                {
+                                    <span class="offline-badge">○ OFFLINE</span>
+                                }
+                            </div>
+                        </a>
+                    }
+                </div>
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <p>&copy; @DateTime.Now.Year TV App - Powered by Umbraco CMS</p>
+        </footer>
+    </div>
+</body>
+</html>

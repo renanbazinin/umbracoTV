@@ -1,0 +1,405 @@
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage
+@{
+    Layout = null;
+    var channelName = Model?.Name ?? "Channel";
+    var streamUrl = Model?.Value<string>("streamUrl") ?? "";
+    
+    // Support both media picker (logo) and direct URL (logoUrl) with backwards compatibility
+    var logoMedia = Model?.Value<IPublishedContent>("logo");
+    var logoUrl = Model?.Value<string>("logoUrl") ?? "";
+    // Priority: Media picker first, then URL string
+    var logoSrc = logoMedia != null ? logoMedia.Url() : (!string.IsNullOrWhiteSpace(logoUrl) ? logoUrl : "");
+    
+    var epgId = Model?.Value<string>("epgId") ?? "";
+    var isActive = Model?.Value<bool>("isActive") ?? true;
+    var parentContent = Model?.Parent;
+    
+    // Helper function to get logo URL for any channel (supports both formats)
+    Func<IPublishedContent, string> GetChannelLogoUrl = (channel) => {
+        var chLogoMedia = channel.Value<IPublishedContent>("logo");
+        var chLogoUrl = channel.Value<string>("logoUrl") ?? "";
+        if (chLogoMedia != null) return chLogoMedia.Url();
+        if (!string.IsNullOrWhiteSpace(chLogoUrl)) return chLogoUrl;
+        return "";
+    };
+    
+    // Get ALL channels from entire site using Umbraco helper
+    var siblingChannels = new List<IPublishedContent>();
+    
+    // Use Umbraco helper to get content at root
+    var allRoots = Umbraco.ContentAtRoot();
+    foreach (var root in allRoots)
+    {
+        // Get all tvChannel descendants from this root
+        var channelsFromRoot = root.DescendantsOrSelf()
+            .Where(x => x.ContentType.Alias == "tvChannel")
+            .ToList();
+        siblingChannels.AddRange(channelsFromRoot);
+    }
+    
+    // Sort by name
+    siblingChannels = siblingChannels.OrderBy(x => x.Name).ToList();
+    
+    // Debug logging
+    var channelNames = string.Join(", ", siblingChannels.Select(c => c.Name));
+    System.Diagnostics.Debug.WriteLine($"[TvChannel View] Found {siblingChannels.Count} channels: {channelNames}");
+    
+    var currentIndex = siblingChannels.FindIndex(c => c.Id == Model?.Id);
+    var prevChannel = currentIndex > 0 ? siblingChannels[currentIndex - 1] : null;
+    var nextChannel = currentIndex < siblingChannels.Count - 1 ? siblingChannels[currentIndex + 1] : null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@channelName - TV App</title>
+    <link rel="stylesheet" href="/css/tv-app.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body class="player-page">
+    <!-- Side Channel Menu -->
+    <aside class="channel-sidebar" id="channel-sidebar">
+        <div class="sidebar-header">
+            <h3>📺 Channels (@siblingChannels.Count)</h3>
+            <button class="sidebar-close" id="sidebar-close">✕</button>
+        </div>
+        <div class="sidebar-search">
+            <input type="text" id="sidebar-search" placeholder="Search channels..." />
+        </div>
+        @if (siblingChannels.Count == 0)
+        {
+            <div style="padding: 1rem; color: rgba(255,255,255,0.6); text-align: center;">
+                No channels found. Please add TV channels to your homepage.
+            </div>
+        }
+        <div class="sidebar-channels" id="sidebar-channels">
+            @foreach (var channel in siblingChannels)
+            {
+                var chLogoSrc = GetChannelLogoUrl(channel);
+                var chIsActive = channel.Value<bool>("isActive", fallback: Fallback.ToDefaultValue, defaultValue: true);
+                var isCurrent = channel.Id == Model?.Id;
+                <a href="@channel.Url()" class="sidebar-channel @(isCurrent ? "active" : "") @(chIsActive ? "" : "inactive")" data-channel-name="@channel.Name?.ToLower()">
+                    <div class="sidebar-channel-logo">
+                        @if (!string.IsNullOrWhiteSpace(chLogoSrc))
+                        {
+                            <img src="@chLogoSrc" alt="@channel.Name" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="mini-placeholder">📺</span>
+                        }
+                    </div>
+                    <div class="sidebar-channel-info">
+                        <span class="sidebar-channel-name">@channel.Name</span>
+                        @if (chIsActive)
+                        {
+                            <span class="sidebar-live-dot"></span>
+                        }
+                    </div>
+                    @if (isCurrent)
+                    {
+                        <span class="now-playing">▶</span>
+                    }
+                </a>
+            }
+        </div>
+    </aside>
+
+    <!-- Sidebar Toggle Button -->
+    <button class="sidebar-toggle" id="sidebar-toggle" title="Channel List">
+        <span class="toggle-icon">☰</span>
+        <span class="toggle-text">Channels</span>
+    </button>
+
+    <div class="app-container with-sidebar">
+        <header class="app-header player-header">
+            <div class="logo">
+                <a href="@(parentContent?.Url() ?? "/")" class="back-link">
+                    <span class="back-arrow">←</span>
+                    <span class="back-text">@(parentContent?.Name ?? "Home")</span>
+                </a>
+            </div>
+            <div class="channel-title">
+                @if (!string.IsNullOrWhiteSpace(logoSrc))
+                {
+                    <img src="@logoSrc" alt="@channelName" class="header-logo" />
+                }
+                <h1>@channelName</h1>
+                @if (isActive)
+                {
+                    <span class="live-badge header-live"><span class="pulse-dot"></span> LIVE</span>
+                }
+            </div>
+            <nav class="nav-links">
+                <a href="/">Home</a>
+            </nav>
+        </header>
+
+        <main class="player-content">
+            @if (isActive && !string.IsNullOrEmpty(streamUrl))
+            {
+                <div class="video-wrapper">
+                    <div class="video-container">
+                        <video id="video-player" controls autoplay playsinline>
+                            Your browser does not support the video tag.
+                        </video>
+                        <div class="video-overlay" id="video-overlay">
+                            <div class="loading-spinner"></div>
+                            <p>Loading stream...</p>
+                        </div>
+                        
+                        <!-- Channel Navigation Overlay -->
+                        <div class="channel-nav-overlay">
+                            @if (prevChannel != null)
+                            {
+                                <a href="@prevChannel.Url()" class="nav-btn prev-btn" title="@prevChannel.Name">
+                                    <span class="nav-arrow">‹</span>
+                                </a>
+                            }
+                            @if (nextChannel != null)
+                            {
+                                <a href="@nextChannel.Url()" class="nav-btn next-btn" title="@nextChannel.Name">
+                                    <span class="nav-arrow">›</span>
+                                </a>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="player-controls">
+                        <div class="controls-left">
+                            @if (prevChannel != null)
+                            {
+                                <a href="@prevChannel.Url()" class="control-btn nav-control">
+                                    <span>⏮</span> Previous
+                                </a>
+                            }
+                        </div>
+                        <div class="controls-center">
+                            <button id="fullscreen-btn" class="control-btn">⛶ Fullscreen</button>
+                            <button id="pip-btn" class="control-btn">🖥️ PiP</button>
+                            <div class="volume-control">
+                                <span class="volume-icon" id="volume-icon">🔊</span>
+                                <input type="range" id="volume-slider" min="0" max="100" value="80">
+                            </div>
+                        </div>
+                        <div class="controls-right">
+                            @if (nextChannel != null)
+                            {
+                                <a href="@nextChannel.Url()" class="control-btn nav-control">
+                                    Next <span>⏭</span>
+                                </a>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const video = document.getElementById('video-player');
+                        const overlay = document.getElementById('video-overlay');
+                        const streamUrl = '@Html.Raw(streamUrl)';
+
+                        if (Hls.isSupported()) {
+                            const hls = new Hls({
+                                enableWorker: true,
+                                lowLatencyMode: true,
+                                maxBufferLength: 30,
+                                maxMaxBufferLength: 60
+                            });
+                            hls.loadSource(streamUrl);
+                            hls.attachMedia(video);
+                            hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                                overlay.style.display = 'none';
+                                video.play().catch(e => console.log('Autoplay prevented:', e));
+                            });
+                            hls.on(Hls.Events.ERROR, function(event, data) {
+                                if (data.fatal) {
+                                    overlay.innerHTML = '<div class="error-content"><span class="error-icon">❌</span><p>Stream unavailable</p><p class="error-sub">Please try again later</p></div>';
+                                }
+                            });
+                        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                            video.src = streamUrl;
+                            video.addEventListener('loadedmetadata', function() {
+                                overlay.style.display = 'none';
+                                video.play();
+                            });
+                        } else {
+                            overlay.innerHTML = '<div class="error-content"><span class="error-icon">❌</span><p>HLS not supported</p></div>';
+                        }
+
+                        // Fullscreen
+                        document.getElementById('fullscreen-btn').addEventListener('click', function() {
+                            const container = document.querySelector('.video-container');
+                            if (document.fullscreenElement) {
+                                document.exitFullscreen();
+                            } else if (container.requestFullscreen) {
+                                container.requestFullscreen();
+                            } else if (container.webkitRequestFullscreen) {
+                                container.webkitRequestFullscreen();
+                            }
+                        });
+
+                        // Picture-in-Picture
+                        document.getElementById('pip-btn').addEventListener('click', function() {
+                            if (document.pictureInPictureElement) {
+                                document.exitPictureInPicture();
+                            } else if (video.requestPictureInPicture) {
+                                video.requestPictureInPicture();
+                            }
+                        });
+
+                        // Volume
+                        const volumeSlider = document.getElementById('volume-slider');
+                        const volumeIcon = document.getElementById('volume-icon');
+                        
+                        volumeSlider.addEventListener('input', function(e) {
+                            const vol = e.target.value / 100;
+                            video.volume = vol;
+                            updateVolumeIcon(vol);
+                        });
+
+                        function updateVolumeIcon(vol) {
+                            if (vol === 0) volumeIcon.textContent = '🔇';
+                            else if (vol < 0.5) volumeIcon.textContent = '🔉';
+                            else volumeIcon.textContent = '🔊';
+                        }
+
+                        // Keyboard shortcuts
+                        document.addEventListener('keydown', function(e) {
+                            if (e.target.tagName === 'INPUT') return;
+                            
+                            switch(e.key) {
+                                case ' ':
+                                case 'k':
+                                    e.preventDefault();
+                                    video.paused ? video.play() : video.pause();
+                                    break;
+                                case 'f':
+                                    document.getElementById('fullscreen-btn').click();
+                                    break;
+                                case 'm':
+                                    video.muted = !video.muted;
+                                    updateVolumeIcon(video.muted ? 0 : video.volume);
+                                    break;
+                                case 'ArrowUp':
+                                    video.volume = Math.min(1, video.volume + 0.1);
+                                    volumeSlider.value = video.volume * 100;
+                                    updateVolumeIcon(video.volume);
+                                    break;
+                                case 'ArrowDown':
+                                    video.volume = Math.max(0, video.volume - 0.1);
+                                    volumeSlider.value = video.volume * 100;
+                                    updateVolumeIcon(video.volume);
+                                    break;
+                            }
+                        });
+
+                        // Sidebar toggle
+                        const sidebar = document.getElementById('channel-sidebar');
+                        const sidebarToggle = document.getElementById('sidebar-toggle');
+                        const sidebarClose = document.getElementById('sidebar-close');
+
+                        sidebarToggle.addEventListener('click', function() {
+                            sidebar.classList.toggle('open');
+                        });
+
+                        sidebarClose.addEventListener('click', function() {
+                            sidebar.classList.remove('open');
+                        });
+
+                        // Sidebar search
+                        document.getElementById('sidebar-search').addEventListener('input', function(e) {
+                            const searchTerm = e.target.value.toLowerCase();
+                            document.querySelectorAll('.sidebar-channel').forEach(channel => {
+                                const name = channel.getAttribute('data-channel-name') || '';
+                                channel.style.display = name.includes(searchTerm) ? '' : 'none';
+                            });
+                        });
+
+                        // Close sidebar on escape
+                        document.addEventListener('keydown', function(e) {
+                            if (e.key === 'Escape') {
+                                sidebar.classList.remove('open');
+                            }
+                        });
+                    });
+                </script>
+            }
+            else
+            {
+                <div class="offline-message">
+                    <div class="offline-icon">📺</div>
+                    <h2>Channel Offline</h2>
+                    <p>This channel is currently not available.</p>
+                    <a href="/" class="btn">Browse Other Channels</a>
+                </div>
+            }
+
+            <!-- Channel Info -->
+            <section class="channel-details">
+                <h2>About this Channel</h2>
+                <div class="details-grid">
+                    <div class="detail-item">
+                        <span class="label">Channel</span>
+                        <span class="value">@channelName</span>
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Category</span>
+                        <span class="value">@(parentContent?.Name ?? "Uncategorized")</span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(epgId))
+                    {
+                        <div class="detail-item">
+                            <span class="label">EPG ID</span>
+                            <span class="value">@epgId</span>
+                        </div>
+                    }
+                    <div class="detail-item">
+                        <span class="label">Status</span>
+                        <span class="value">@(isActive ? "🟢 Live" : "🔴 Offline")</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- More Channels -->
+            @if (siblingChannels.Count > 1)
+            {
+                <section class="related-channels">
+                    <h2>More Channels</h2>
+                    <div class="channels-grid">
+                        @foreach (var channel in siblingChannels.Where(c => c.Id != Model?.Id).Take(6))
+                        {
+                            var chLogoSrc = GetChannelLogoUrl(channel);
+                            var chIsActive = channel.Value<bool>("isActive", fallback: Fallback.ToDefaultValue, defaultValue: true);
+                            <a href="@channel.Url()" class="channel-card small @(chIsActive ? "" : "inactive")">
+                                <div class="channel-logo">
+                                    @if (!string.IsNullOrWhiteSpace(chLogoSrc))
+                                    {
+                                        <img src="@chLogoSrc" alt="@channel.Name" loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <div class="logo-placeholder">📺</div>
+                                    }
+                                </div>
+                                <span>@channel.Name</span>
+                                @if (chIsActive)
+                                {
+                                    <span class="mini-live-badge"></span>
+                                }
+                            </a>
+                        }
+                    </div>
+                </section>
+            }
+        </main>
+
+        <footer class="app-footer">
+            <p>&copy; @DateTime.Now.Year TV App - Powered by Umbraco CMS</p>
+        </footer>
+    </div>
+</body>
+</html>

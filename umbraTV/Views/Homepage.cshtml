@@ -1,0 +1,238 @@
+@inherits Umbraco.Cms.Web.Common.Views.UmbracoViewPage
+@{
+    Layout = null;
+    
+    // Get all channels from entire site using Umbraco helper
+    var allChannels = new List<IPublishedContent>();
+    
+    // Use Umbraco helper to get content at root
+    var allRoots = Umbraco.ContentAtRoot();
+    foreach (var root in allRoots)
+    {
+        // Get all tvChannel descendants from this root
+        var channelsFromRoot = root.DescendantsOrSelf()
+            .Where(x => x.ContentType.Alias == "tvChannel")
+            .ToList();
+        allChannels.AddRange(channelsFromRoot);
+    }
+    
+    // Sort by name
+    allChannels = allChannels.OrderBy(x => x.Name).ToList();
+    
+    // Debug logging
+    System.Diagnostics.Debug.WriteLine($"[Homepage View] Found {allChannels.Count} channels");
+    
+    // Helper function to get logo URL for any channel (supports both media picker and URL string)
+    Func<IPublishedContent, string> GetChannelLogoUrl = (channel) => {
+        var logoMedia = channel.Value<IPublishedContent>("logo");
+        var logoUrl = channel.Value<string>("logoUrl") ?? "";
+        if (logoMedia != null) return logoMedia.Url();
+        if (!string.IsNullOrWhiteSpace(logoUrl)) return logoUrl;
+        return "";
+    };
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@(Model?.Value<string>("title") ?? "TV App") - Live Channels</title>
+    <link rel="stylesheet" href="/css/tv-app.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        .big-menu-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 100%);
+        }
+        .big-menu-header {
+            padding: 2rem;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .big-menu-title {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0 0 1rem 0;
+        }
+        .big-menu-search {
+            max-width: 600px;
+            margin: 1rem auto 0;
+            position: relative;
+        }
+        .big-menu-search input {
+            width: 100%;
+            padding: 1rem 1.5rem;
+            font-size: 1.1rem;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+            transition: all 0.3s ease;
+        }
+        .big-menu-search input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .big-menu-content {
+            flex: 1;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .big-channels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        .big-channel-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            text-decoration: none;
+            color: #fff;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .big-channel-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #667eea;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        }
+        .big-channel-logo {
+            width: 120px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            overflow: hidden;
+        }
+        .big-channel-logo img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .big-channel-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 0.5rem;
+        }
+        .big-live-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .big-pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @@keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .no-results {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="big-menu-container">
+        <header class="big-menu-header">
+            <h1 class="big-menu-title">📺 @(Model?.Value<string>("title") ?? "TV Channels")</h1>
+            <p style="color: rgba(255,255,255,0.7); font-size: 1.2rem; margin: 0;">
+                @allChannels.Count channels available
+            </p>
+            <div class="big-menu-search">
+                <input type="text" id="channel-search" placeholder="🔍 Search channels..." autocomplete="off" />
+            </div>
+        </header>
+
+        <main class="big-menu-content">
+            <div class="big-channels-grid" id="channels-container">
+                @foreach (var channel in allChannels)
+                {
+                    var logoSrc = GetChannelLogoUrl(channel);
+                    var isActive = channel.Value<bool>("isActive", fallback: Fallback.ToDefaultValue, defaultValue: true);
+                    <a href="@channel.Url()" class="big-channel-card" data-channel-name="@channel.Name?.ToLower()">
+                        <div class="big-channel-logo">
+                            @if (!string.IsNullOrWhiteSpace(logoSrc))
+                            {
+                                <img src="@logoSrc" alt="@channel.Name" loading="lazy" />
+                            }
+                            else
+                            {
+                                <span style="font-size: 3rem;">📺</span>
+                            }
+                        </div>
+                        <div class="big-channel-name">@channel.Name</div>
+                        @if (isActive)
+                        {
+                            <span class="big-live-indicator">
+                                <span class="big-pulse-dot"></span> LIVE
+                            </span>
+                        }
+                    </a>
+                }
+            </div>
+            <div id="no-results" class="no-results" style="display: none;">
+                No channels found matching your search
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Channel search functionality
+        document.getElementById('channel-search').addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const channelCards = document.querySelectorAll('.big-channel-card');
+            const noResults = document.getElementById('no-results');
+            let visibleCount = 0;
+            
+            channelCards.forEach(card => {
+                const channelName = card.getAttribute('data-channel-name') || '';
+                if (channelName.includes(searchTerm)) {
+                    card.style.display = '';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+            
+            noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+        });
+    </script>
+</body>
+</html>
